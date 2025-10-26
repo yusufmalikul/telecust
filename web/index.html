@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telecust - Customer Service Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>Telecust Admin Dashboard</h1>
+            <button id="settingsBtn" class="btn btn-secondary">Knowledge Base Settings</button>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Conversations List -->
+            <aside class="conversations-panel">
+                <h2>Conversations</h2>
+                <div id="conversationsList" class="conversations-list">
+                    <div class="loading">Loading conversations...</div>
+                </div>
+            </aside>
+
+            <!-- Chat Area -->
+            <main class="chat-panel">
+                <div id="emptyState" class="empty-state">
+                    <p>Select a conversation to view messages</p>
+                </div>
+
+                <div id="chatArea" class="chat-area" style="display: none;">
+                    <!-- Chat Header -->
+                    <div class="chat-header">
+                        <div class="chat-info">
+                            <h3 id="chatUserName">User Name</h3>
+                            <span id="chatUsername" class="chat-username">@username</span>
+                        </div>
+                        <div class="chat-controls">
+                            <button id="toggleBotBtn" class="btn btn-primary">Take Over</button>
+                        </div>
+                    </div>
+
+                    <!-- Messages -->
+                    <div id="messagesContainer" class="messages-container">
+                        <!-- Messages will be loaded here -->
+                    </div>
+
+                    <!-- Message Input -->
+                    <div class="message-input-container">
+                        <textarea id="messageInput" placeholder="Type your message..." rows="2"></textarea>
+                        <button id="sendBtn" class="btn btn-primary">Send</button>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Knowledge Base Settings</h2>
+                <button class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <textarea id="knowledgeBaseInput" placeholder="Enter knowledge base content..." rows="15"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelBtn" class="btn btn-secondary">Cancel</button>
+                <button id="saveKBBtn" class="btn btn-primary">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
