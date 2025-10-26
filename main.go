@@ -18,7 +18,11 @@ func main() {
 	}
 
 	// Initialize database
-	err = database.InitDB("telecust.db")
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "telecust.db" // Default for local development
+	}
+	err = database.InitDB(dbPath)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
