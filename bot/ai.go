@@ -8,7 +8,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"telecust/database"
 )
 
 type OpenAIRequest struct {
@@ -27,9 +29,9 @@ type OpenAIResponse struct {
 	} `json:"choices"`
 }
 
-// QueryKnowledgeBase uses OpenAI to answer user queries based on knowledge base
-func QueryKnowledgeBase(userQuery, knowledgeBase string) string {
-	log.Printf("[AI] Received query: %s", userQuery)
+// QueryKnowledgeBase uses OpenAI to answer user queries based on knowledge base and conversation history
+func QueryKnowledgeBase(userQuery, knowledgeBase string, conversationID int) string {
+	log.Printf("[AI] Received query: %s (conversation ID: %d)", userQuery, conversationID)
 
 	// Check for simple greetings first
 	greetings := []string{"halo", "hai", "hi", "hello", "hey", "selamat"}
@@ -66,15 +68,70 @@ Jawab pertanyaan customer berdasarkan knowledge base berikut:
 Instruksi:
 - Jawab dengan bahasa Indonesia yang sopan dan ramah
 - Gunakan sapaan "kak" untuk customer
+- PENTING: Perhatikan riwayat percakapan dengan baik. Jika customer bertanya tentang pesanan mereka sebelumnya, lihat di riwayat chat apa yang mereka pesan
 - Jika pertanyaan tidak bisa dijawab dari knowledge base, beritahu dengan sopan bahwa kamu tidak memiliki informasi tersebut
 - Jawab singkat dan jelas
-- Jangan mengarang informasi yang tidak ada di knowledge base`, knowledgeBase)
+- Jangan mengarang informasi yang tidak ada di knowledge base atau riwayat percakapan`, knowledgeBase)
 
 	log.Printf("[AI] Knowledge base length: %d characters", len(knowledgeBase))
-	log.Printf("[AI] Calling OpenAI API...")
 
-	// Call OpenAI API
-	response, err := callOpenAI(apiBase, apiKey, systemPrompt, userQuery)
+	// Get history limit from env or use default
+	historyLimit := 10 // Default: last 10 messages (5 back-and-forth)
+	if envLimit := os.Getenv("CONVERSATION_HISTORY_LIMIT"); envLimit != "" {
+		if limit, err := strconv.Atoi(envLimit); err == nil && limit > 0 {
+			historyLimit = limit
+		}
+	}
+
+	// Get recent conversation history (we'll filter out the current one)
+	log.Printf("[AI] Loading conversation history (limit: %d)...", historyLimit)
+	history, err := database.GetRecentMessages(conversationID, historyLimit)
+	if err != nil {
+		log.Printf("[AI] Warning: Could not load conversation history: %v", err)
+		history = []database.Message{}
+	}
+	log.Printf("[AI] Loaded %d messages from database", len(history))
+
+	// Convert history to OpenAI message format, excluding the current message
+	// Check if the last message is the current one (which we just saved)
+	skipLastMessage := false
+	if len(history) > 0 {
+		lastMsg := history[len(history)-1]
+		if lastMsg.MessageText == userQuery && lastMsg.SenderType == "user" {
+			skipLastMessage = true
+			log.Printf("[AI] Detected current message in history, will exclude it")
+		}
+	}
+
+	var conversationHistory []Message
+	for i, msg := range history {
+		// Skip the last message if it's the current one
+		if skipLastMessage && i == len(history)-1 {
+			log.Printf("[AI] Skipping current message from history (last position)")
+			continue
+		}
+
+		role := "user"
+		if msg.SenderType == "bot" || msg.SenderType == "assistant" {
+			role = "assistant"
+		} else if msg.SenderType == "admin" {
+			// Admin messages are also from assistant perspective
+			role = "assistant"
+		}
+
+		conversationHistory = append(conversationHistory, Message{
+			Role:    role,
+			Content: msg.MessageText,
+		})
+
+		log.Printf("[AI] History[%d]: %s said: %s", i, role, msg.MessageText)
+	}
+
+	log.Printf("[AI] Current user query: %s", userQuery)
+	log.Printf("[AI] Calling OpenAI API with %d history messages...", len(conversationHistory))
+
+	// Call OpenAI API with conversation history
+	response, err := callOpenAI(apiBase, apiKey, systemPrompt, userQuery, conversationHistory)
 	if err != nil {
 		log.Printf("[AI] ERROR: OpenAI API failed: %v", err)
 		// Fallback to simple response
@@ -87,7 +144,7 @@ Instruksi:
 	return response
 }
 
-func callOpenAI(apiBase, apiKey, systemPrompt, userMessage string) (string, error) {
+func callOpenAI(apiBase, apiKey, systemPrompt, userMessage string, conversationHistory []Message) (string, error) {
 	url := fmt.Sprintf("%s/chat/completions", strings.TrimSuffix(apiBase, "/"))
 	log.Printf("[OpenAI] POST %s", url)
 
@@ -98,18 +155,28 @@ func callOpenAI(apiBase, apiKey, systemPrompt, userMessage string) (string, erro
 	}
 	log.Printf("[OpenAI] Using model: %s", model)
 
-	requestBody := OpenAIRequest{
-		Model: model,
-		Messages: []Message{
-			{
-				Role:    "system",
-				Content: systemPrompt,
-			},
-			{
-				Role:    "user",
-				Content: userMessage,
-			},
+	// Build messages array: system prompt + conversation history + current user message
+	messages := []Message{
+		{
+			Role:    "system",
+			Content: systemPrompt,
 		},
+	}
+
+	// Add conversation history
+	messages = append(messages, conversationHistory...)
+
+	// Add current user message
+	messages = append(messages, Message{
+		Role:    "user",
+		Content: userMessage,
+	})
+
+	log.Printf("[OpenAI] Total messages in request: %d (1 system + %d history + 1 current)", len(messages), len(conversationHistory))
+
+	requestBody := OpenAIRequest{
+		Model:    model,
+		Messages: messages,
 	}
 
 	jsonData, err := json.Marshal(requestBody)

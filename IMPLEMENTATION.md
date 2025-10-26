@@ -123,6 +123,8 @@ Supports custom OpenAI API base URL for alternative providers.
 - `TELEGRAM_BOT_TOKEN` or `TELE_BOT_TOKEN` - Bot token from @BotFather
 - `OPENAI_API_KEY` - OpenAI API key (required for AI responses)
 - `OPENAI_API_BASE` - Custom OpenAI API base URL (optional, defaults to https://api.openai.com/v1)
+- `OPENAI_MODEL` - OpenAI model to use (optional, defaults to gpt-3.5-turbo, can use gpt-4 for better accuracy)
+- `CONVERSATION_HISTORY_LIMIT` - Number of recent messages to include in conversation context (optional, default: 10)
 - `PORT` - HTTP server port (default: 8080)
 
 ## Run Instructions

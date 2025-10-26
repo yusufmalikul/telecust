@@ -214,6 +214,43 @@ func GetMessages(conversationID int) ([]Message, error) {
 	return messages, nil
 }
 
+// GetRecentMessages returns the most recent N messages for a conversation
+func GetRecentMessages(conversationID int, limit int) ([]Message, error) {
+	rows, err := DB.Query(`
+		SELECT id, conversation_id, sender_type, message_text, created_at
+		FROM messages
+		WHERE conversation_id = ?
+		ORDER BY created_at DESC
+		LIMIT ?
+	`, conversationID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var messages []Message
+	for rows.Next() {
+		var msg Message
+		var createdAt string
+
+		err := rows.Scan(&msg.ID, &msg.ConversationID, &msg.SenderType, &msg.MessageText, &createdAt)
+		if err != nil {
+			return nil, err
+		}
+
+		// Parse datetime string
+		msg.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+		messages = append(messages, msg)
+	}
+
+	// Reverse the slice to get chronological order (oldest first)
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
+	}
+
+	return messages, nil
+}
+
 // SetBotActive sets the is_bot_active flag for a conversation
 func SetBotActive(conversationID int, active bool) error {
 	_, err := DB.Exec(`

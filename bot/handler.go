@@ -92,7 +92,7 @@ func (b *Bot) handleMessage(message *tgbotapi.Message) {
 	}
 
 	log.Printf("[BOT] Querying AI for response...")
-	response := QueryKnowledgeBase(message.Text, kb)
+	response := QueryKnowledgeBase(message.Text, kb, conv.ID)
 
 	// Send response
 	log.Printf("[BOT] Sending response to user: %s", response)
