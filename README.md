@@ -5,12 +5,15 @@ A simple AI-powered customer service bot for Telegram with an admin dashboard.
 ## Features
 
 - Telegram bot that answers customer questions using a knowledge base
-- OpenAI-powered intelligent responses (GPT-3.5-turbo)
+- OpenAI-powered intelligent responses with configurable models (GPT-3.5-turbo, GPT-4, etc.)
+- Conversation memory for context-aware responses
 - Admin dashboard to view all conversations
 - Take over feature to stop bot and reply manually
 - Knowledge base editor
 - Clean UI with Telegram-style blue and white theme
 - Supports custom OpenAI API endpoints
+- Docker support for easy deployment
+- Configurable database path for flexible storage
 
 ## Tech Stack
 
@@ -53,16 +56,22 @@ Create a `.env` file in the project root:
 TELE_BOT_TOKEN=your-telegram-bot-token-here
 OPENAI_API_KEY=your-openai-api-key-here
 OPENAI_API_BASE=https://api.openai.com/v1
+OPENAI_MODEL=gpt-3.5-turbo
+CONVERSATION_HISTORY_LIMIT=10
+DB_PATH=telecust.db
 PORT=8080
 ```
 
 **Environment Variables:**
-- `TELE_BOT_TOKEN` or `TELEGRAM_BOT_TOKEN` - Your Telegram bot token from @BotFather
+- `TELE_BOT_TOKEN` or `TELEGRAM_BOT_TOKEN` - Your Telegram bot token from @BotFather (required)
 - `OPENAI_API_KEY` - Your OpenAI API key (required)
 - `OPENAI_API_BASE` - OpenAI API endpoint (optional, defaults to https://api.openai.com/v1)
+- `OPENAI_MODEL` - AI model to use (optional, defaults to gpt-3.5-turbo). Examples: gpt-3.5-turbo, gpt-4, gpt-4o, gpt-3.5-turbo-ca
+- `CONVERSATION_HISTORY_LIMIT` - Number of recent messages to include for context (optional, defaults to 10)
+- `DB_PATH` - Path to SQLite database file (optional, defaults to telecust.db)
 - `PORT` - HTTP server port (optional, defaults to 8080)
 
-**Note:** You can also use alternative OpenAI-compatible services by changing `OPENAI_API_BASE`.
+**Note:** You can also use alternative OpenAI-compatible services by changing `OPENAI_API_BASE`. For example, use ChatAnywhere with `OPENAI_API_BASE=https://api.chatanywhere.org/v1` and `OPENAI_MODEL=gpt-3.5-turbo-ca`.
 
 ### 5. Run the Application
 
@@ -99,19 +108,22 @@ http://localhost:8080
 5. Use "Activate Bot" to re-enable automatic responses
 6. Click "Knowledge Base Settings" to edit the knowledge base
 
-## Knowledge Base
+## Knowledge Base & Conversation Memory
 
-The bot uses OpenAI GPT-3.5-turbo to provide intelligent responses based on your knowledge base:
+The bot uses OpenAI (configurable model) to provide intelligent responses based on your knowledge base with conversation context:
 
 **How it works:**
 - Simple greetings (halo, hai, hello) get instant responses without API calls
 - Other queries are sent to OpenAI with your knowledge base as context
+- The bot maintains conversation memory, including recent messages for context-aware responses
+- You can configure how many recent messages to include via `CONVERSATION_HISTORY_LIMIT` (default: 10)
 - The AI is instructed to:
   - Answer in polite Indonesian
   - Use "kak" to address customers
   - Only provide information from the knowledge base
   - Admit when information is not available
   - Keep responses short and clear
+  - Understand context from previous messages in the conversation
 
 **Default knowledge base** (Indonesian example for potato chips):
 ```
@@ -162,6 +174,9 @@ telecust/
 TELE_BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
 OPENAI_API_KEY=sk-your-api-key-here
 OPENAI_API_BASE=https://api.openai.com/v1
+OPENAI_MODEL=gpt-3.5-turbo
+CONVERSATION_HISTORY_LIMIT=10
+DB_PATH=telecust.db
 PORT=8080
 ```
 
@@ -169,6 +184,8 @@ PORT=8080
 ```bash
 export TELEGRAM_BOT_TOKEN="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 export OPENAI_API_KEY="sk-your-api-key-here"
+export OPENAI_MODEL="gpt-4"
+export CONVERSATION_HISTORY_LIMIT="15"
 export PORT="3000"
 go run main.go
 ```
@@ -177,9 +194,52 @@ go run main.go
 - `TELEGRAM_BOT_TOKEN` or `TELE_BOT_TOKEN` - Your Telegram bot token (required)
 - `OPENAI_API_KEY` - Your OpenAI API key (required)
 - `OPENAI_API_BASE` - OpenAI API endpoint (optional, defaults to https://api.openai.com/v1)
+- `OPENAI_MODEL` - AI model to use (optional, defaults to gpt-3.5-turbo)
+- `CONVERSATION_HISTORY_LIMIT` - Context window size (optional, default: 10)
+- `DB_PATH` - Database file path (optional, default: telecust.db)
 - `PORT` - HTTP server port (optional, default: 8080)
 
 ## Deployment
+
+### Docker Deployment (Recommended)
+
+The easiest way to deploy Telecust is using Docker:
+
+**1. Build the Docker image:**
+```bash
+docker build -t telecust .
+```
+
+**2. Run the container:**
+```bash
+docker run -d \
+  --name telecust \
+  -p 8080:8080 \
+  -v $(pwd)/data:/data \
+  -e TELE_BOT_TOKEN="your-telegram-bot-token" \
+  -e OPENAI_API_KEY="your-openai-api-key" \
+  -e OPENAI_API_BASE="https://api.openai.com/v1" \
+  -e OPENAI_MODEL="gpt-3.5-turbo" \
+  -e CONVERSATION_HISTORY_LIMIT="10" \
+  telecust
+```
+
+**3. View logs:**
+```bash
+docker logs -f telecust
+```
+
+**Docker Environment:**
+- The database is stored in `/data/telecust.db` inside the container
+- Mount a volume to `/data` to persist the database
+- All environment variables work the same as non-Docker deployment
+- Web UI is accessible on the exposed port (default: 8080)
+
+**Using with Docker Hub (if published):**
+```bash
+docker pull yourusername/telecust:latest
+docker run -d --name telecust -p 8080:8080 -v $(pwd)/data:/data -e TELE_BOT_TOKEN="..." -e OPENAI_API_KEY="..." yourusername/telecust:latest
+```
 
 ### Simple VPS Deployment
 
@@ -202,6 +262,9 @@ WorkingDirectory=/path/to/telecust
 Environment="TELEGRAM_BOT_TOKEN=your-token"
 Environment="OPENAI_API_KEY=your-api-key"
 Environment="OPENAI_API_BASE=https://api.openai.com/v1"
+Environment="OPENAI_MODEL=gpt-3.5-turbo"
+Environment="CONVERSATION_HISTORY_LIMIT=10"
+Environment="DB_PATH=/path/to/telecust/telecust.db"
 ExecStart=/path/to/telecust/telecust
 Restart=always
 

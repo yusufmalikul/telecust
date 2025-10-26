@@ -9,6 +9,7 @@ import (
 	"telecust/database"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/gorilla/sessions"
 )
 
 // GetConversations returns all conversations
@@ -175,4 +176,64 @@ func UpdateKnowledgeBase(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+// Session store
+var store = sessions.NewCookieStore([]byte("telecust-secret-key-change-in-production"))
+
+// Login handles user authentication
+func Login(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
+		return
+	}
+
+	// Simple hardcoded authentication
+	if req.Username == "admin" && req.Password == "vibedemo" {
+		session, _ := store.Get(r, "auth-session")
+		session.Values["authenticated"] = true
+		session.Save(r, w)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	json.NewEncoder(w).Encode(map[string]string{"error": "Invalid credentials"})
+}
+
+// Logout handles user logout
+func Logout(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "auth-session")
+	session.Values["authenticated"] = false
+	session.Options.MaxAge = -1
+	session.Save(r, w)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+// AuthMiddleware checks if user is authenticated
+func AuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		session, _ := store.Get(r, "auth-session")
+
+		// Check if user is authenticated
+		if auth, ok := session.Values["authenticated"].(bool); !ok || !auth {
+			http.Redirect(w, r, "/login.html", http.StatusSeeOther)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }

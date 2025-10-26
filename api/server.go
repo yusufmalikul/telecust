@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -17,12 +18,32 @@ func StartServer() {
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
-		AllowCredentials: false,
+		AllowCredentials: true,
 		MaxAge:           300,
 	}))
 
-	// API routes
+	// Public routes (no auth required)
+	r.Post("/api/login", Login)
+	r.Post("/api/logout", Logout)
+	r.Get("/login.html", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./web/login.html")
+	}))
+
+	// Protected API routes (auth required)
 	r.Route("/api", func(r chi.Router) {
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				session, _ := store.Get(r, "auth-session")
+				if auth, ok := session.Values["authenticated"].(bool); !ok || !auth {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusUnauthorized)
+					json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized"})
+					return
+				}
+				next.ServeHTTP(w, r)
+			})
+		})
+
 		r.Get("/conversations", GetConversations)
 		r.Get("/conversations/{id}/messages", GetConversationMessages)
 		r.Post("/conversations/{id}/takeover", TakeOverConversation)
@@ -32,8 +53,8 @@ func StartServer() {
 		r.Put("/knowledge-base", UpdateKnowledgeBase)
 	})
 
-	// Serve static files
-	r.Get("/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Protected static files (auth required)
+	r.With(AuthMiddleware).Get("/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.FileServer(http.Dir("./web")).ServeHTTP(w, r)
 	}))
 
