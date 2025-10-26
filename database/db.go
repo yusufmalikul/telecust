@@ -79,10 +79,12 @@ Jika pesan di atas 100 bungkus harga Rp3ribu.`
 // GetOrCreateConversation finds or creates a conversation for a Telegram chat
 func GetOrCreateConversation(chatID int64, username, firstName string) (*Conversation, error) {
 	var conv Conversation
+	var createdAt, updatedAt string
+
 	err := DB.QueryRow(`
 		SELECT id, telegram_chat_id, telegram_username, telegram_first_name, is_bot_active, created_at, updated_at
 		FROM conversations WHERE telegram_chat_id = ?
-	`, chatID).Scan(&conv.ID, &conv.TelegramChatID, &conv.TelegramUsername, &conv.TelegramFirstName, &conv.IsBotActive, &conv.CreatedAt, &conv.UpdatedAt)
+	`, chatID).Scan(&conv.ID, &conv.TelegramChatID, &conv.TelegramUsername, &conv.TelegramFirstName, &conv.IsBotActive, &createdAt, &updatedAt)
 
 	if err == sql.ErrNoRows {
 		// Create new conversation
@@ -108,6 +110,10 @@ func GetOrCreateConversation(chatID int64, username, firstName string) (*Convers
 	if err != nil {
 		return nil, err
 	}
+
+	// Parse datetime strings
+	conv.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+	conv.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
 
 	return &conv, nil
 }
@@ -158,11 +164,19 @@ func GetAllConversations() ([]Conversation, error) {
 	var conversations []Conversation
 	for rows.Next() {
 		var conv Conversation
+		var createdAt, updatedAt, lastMessageTime string
+
 		err := rows.Scan(&conv.ID, &conv.TelegramChatID, &conv.TelegramUsername, &conv.TelegramFirstName,
-			&conv.IsBotActive, &conv.CreatedAt, &conv.UpdatedAt, &conv.LastMessage, &conv.LastMessageTime)
+			&conv.IsBotActive, &createdAt, &updatedAt, &conv.LastMessage, &lastMessageTime)
 		if err != nil {
 			return nil, err
 		}
+
+		// Parse datetime strings
+		conv.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+		conv.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+		conv.LastMessageTime, _ = time.Parse("2006-01-02 15:04:05", lastMessageTime)
+
 		conversations = append(conversations, conv)
 	}
 
@@ -185,10 +199,15 @@ func GetMessages(conversationID int) ([]Message, error) {
 	var messages []Message
 	for rows.Next() {
 		var msg Message
-		err := rows.Scan(&msg.ID, &msg.ConversationID, &msg.SenderType, &msg.MessageText, &msg.CreatedAt)
+		var createdAt string
+
+		err := rows.Scan(&msg.ID, &msg.ConversationID, &msg.SenderType, &msg.MessageText, &createdAt)
 		if err != nil {
 			return nil, err
 		}
+
+		// Parse datetime string
+		msg.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
 		messages = append(messages, msg)
 	}
 
@@ -216,9 +235,6 @@ func UpdateKnowledgeBase(content string) error {
 	_, err := DB.Exec(`
 		UPDATE knowledge_base SET content = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = (SELECT id FROM knowledge_base ORDER BY id DESC LIMIT 1)
-	`)
-	if err == nil {
-		_, err = DB.Exec("INSERT INTO knowledge_base (content) VALUES (?)", content)
-	}
+	`, content)
 	return err
 }

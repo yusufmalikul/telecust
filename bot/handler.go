@@ -42,6 +42,9 @@ func (b *Bot) Start() {
 }
 
 func (b *Bot) handleMessage(message *tgbotapi.Message) {
+	log.Printf("[BOT] Received message from @%s (chat_id: %d): %s",
+		message.From.UserName, message.Chat.ID, message.Text)
+
 	// Get or create conversation
 	conv, err := database.GetOrCreateConversation(
 		message.Chat.ID,
@@ -49,19 +52,22 @@ func (b *Bot) handleMessage(message *tgbotapi.Message) {
 		message.From.FirstName,
 	)
 	if err != nil {
-		log.Printf("Error getting conversation: %v", err)
+		log.Printf("[BOT] Error getting conversation: %v", err)
 		return
 	}
+
+	log.Printf("[BOT] Conversation ID: %d, Bot Active: %v", conv.ID, conv.IsBotActive)
 
 	// Save user message
 	err = database.SaveMessage(conv.ID, "user", message.Text)
 	if err != nil {
-		log.Printf("Error saving message: %v", err)
+		log.Printf("[BOT] Error saving message: %v", err)
 		return
 	}
 
 	// Handle /start and /help commands
 	if message.IsCommand() {
+		log.Printf("[BOT] Command detected: /%s", message.Command())
 		switch message.Command() {
 		case "start", "help":
 			b.sendMessage(message.Chat.ID, "Halo! Saya siap membantu Anda. Silakan tanyakan apa saja!")
@@ -73,27 +79,32 @@ func (b *Bot) handleMessage(message *tgbotapi.Message) {
 	// Check if bot is active for this conversation
 	if !conv.IsBotActive {
 		// Bot is in takeover mode, don't respond
-		log.Printf("Bot inactive for chat %d, admin mode", message.Chat.ID)
+		log.Printf("[BOT] Bot inactive for chat %d, admin mode - not responding", message.Chat.ID)
 		return
 	}
 
 	// Query knowledge base
+	log.Printf("[BOT] Loading knowledge base...")
 	kb, err := database.GetKnowledgeBase()
 	if err != nil {
-		log.Printf("Error getting knowledge base: %v", err)
+		log.Printf("[BOT] Error getting knowledge base: %v", err)
 		kb = ""
 	}
 
+	log.Printf("[BOT] Querying AI for response...")
 	response := QueryKnowledgeBase(message.Text, kb)
 
 	// Send response
+	log.Printf("[BOT] Sending response to user: %s", response)
 	b.sendMessage(message.Chat.ID, response)
 
 	// Save bot response
 	err = database.SaveMessage(conv.ID, "bot", response)
 	if err != nil {
-		log.Printf("Error saving bot response: %v", err)
+		log.Printf("[BOT] Error saving bot response: %v", err)
 	}
+
+	log.Printf("[BOT] Message handling completed for chat %d", message.Chat.ID)
 }
 
 func (b *Bot) sendMessage(chatID int64, text string) {
